@@ -1,0 +1,97 @@
+#!/bin/bash
+# grimcap
+# wrapper around grim, wf-recorder & slurp
+# handles screenshots (to clipboard) & recording
+# each dependency could be considered optional, depending on use-case
+
+# dependencies:
+# grim - capture screenshot
+# slurp - select geometry
+# wf-recorder - capture video
+# wl-clipboard - copy
+# hyprctl OR swaymsg - active window detection
+# (swayimg) - open image
+# (mpv) - play video
+# jq - json
+
+# references:
+# 1. https://wiki.archlinux.org/title/Screen_capture#Wayland
+# 2. https://github.com/hyprwm/contrib/blob/main/grimblast/grimblast
+# 3. https://github.com/swaywm/sway/blob/master/contrib/grimshot
+
+# a simplified take on grimblast but we retain swayland compatability from grimshot, implement screen recording, & more
+# this don't process or edit captures in any way; simply captures, stores & optionally opens if swayimg is installed & a file was saved
+# created by following the wayland section of the archwiki
+
+usage() {
+    cat <<EOF
+Usage: grimcap <ACTION> <TARGET> [DIR]
+
+Actions:
+    snap: screenshot to DIR
+    snap-copy: screenshot to clipboard
+    rec: record to DIR
+
+Targets:
+    active: active window
+    area: select a region
+    screen: entire display
+EOF
+
+    exit 1
+}
+
+_into() {
+    capDir="${3:-$HOME/.caps}"
+    [[ $capDir =~ /.caps ]]&& [[ ! -d $capDir ]]&& mkdir "$capDir"
+    
+    printf "${capDir%/}/%(%Y-%m-%d_%H-%M-%S)T_$2.$1"
+}
+
+active_win() {
+    if hash hyprctl 2>/dev/null; then
+        hyprctl -j activewindow | \
+            jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
+    elif hash swaymsg 2>/dev/null; then
+        swaymsg -t get_tree | \
+            jq -r '.. | select(.focused?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"'
+    fi
+}
+
+case "$1" in
+    'snap')
+        capPath="$(_into 'png' "$2" "$3")"
+        
+        case "$2" in
+            'active') grim -l 9 -g "$(active_win)" "$capPath";;
+            'area') slurp | grim -l 9 -g - "$capPath";;
+            'screen') grim -l 9 "$capPath";;
+            *) usage;;
+        esac
+        
+        printf '%s\n' "$capPath"
+        hash swayimg 2>/dev/null&& swayimg "$capPath"
+    ;;
+    'snap-copy')
+        case "$2" in
+            'active') grim -l 9 -g "$(active_win)" - | wl-copy;;
+            'area') slurp | grim -l 9 -g - - | wl-copy;;
+            'screen') grim -l 9 - | wl-copy;;
+            *) usage;;
+        esac
+    ;;
+    'rec')
+        capPath="$(_into 'mp4' "$2" "$3")"
+
+        case "$2" in
+            'active') wf-recorder -g "$(active_win)" -f "$capPath";;
+            'area') wf-recorder -g "$(slurp)" -f "$capPath";;
+            'screen') wf-recorder -f "$capPath";;
+            *) usage;;
+        esac
+
+        printf '%s\n' "$capPath"
+        hash mpv 2>/dev/null&& mpv "$capPath"
+    ;;
+    *) usage;;
+esac

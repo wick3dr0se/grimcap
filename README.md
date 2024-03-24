@@ -1,6 +1,9 @@
 <div align="center">
 <h1>💀 grimcap</h1>
 <p>A simplified take on <code>grimblast</code> while retaining Sway compatability from <code>grimshot</code>. Post-processing or editing features are omitted. Technically just a wrapper around <code>grim</code> & <code>slurp</code>, similar to <code>grimshot</code> but with distinctions such as video capture with <code>wf-recorder</code>, image/video playback with <code>swayimg</code>/<code>mpv</code> and more. The instructions for building this were taken piece by piece from the <a href="https://wiki.archlinux.org/title/Screen_capture#Wayland">ArchWiki</a> directly</p>
+
+<img src="grimcap.gif"/>
+
 <a href='#'><img src="https://img.shields.io/badge/Made%20with-Bash-&?style=flat-square&labelColor=232329&color=46b152&logo=gnu-bash"/></a>
 <a href='#'><img src="https://img.shields.io/badge/Maintained%3F-Yes-green.svg?style=flat-square&labelColor=232329&color=8e7dbe"></img></a>
 <a href="https://discord.gg/W4mQqNnfSq">

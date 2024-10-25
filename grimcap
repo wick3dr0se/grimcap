@@ -43,7 +43,7 @@ EOF
 
 _into() {
     capDir="${3:-$HOME/.caps}"
-    [[ $capDir =~ /.caps ]]&& [[ ! -d $capDir ]]&& mkdir "$capDir"
+    [[ -d $capDir ]]|| mkdir "$capDir"
     
     printf "${capDir%/}/%(%Y-%m-%d_%H-%M-%S)T_$2.$1"
 }
@@ -58,9 +58,11 @@ active_win() {
     fi
 }
 
+set -eEuo pipefail
+
 case "$1" in
     'snap')
-        capPath="$(_into 'png' "$2" "$3")"
+        capPath="$(_into 'png' "$2" "${3-}")"
         
         case "$2" in
             'active') grim -l 9 -g "$(active_win)" "$capPath";;
@@ -69,8 +71,8 @@ case "$1" in
             *) usage;;
         esac
         
-        printf '%s\n' "$capPath"
-        hash swayimg 2>/dev/null&& swayimg "$capPath"
+        printf 'Capture saved to: %s\n' "$capPath"
+        swayimg "$capPath"
     ;;
     'snap-copy')
         case "$2" in
@@ -79,9 +81,11 @@ case "$1" in
             'screen') grim -l 9 - | wl-copy;;
             *) usage;;
         esac
+
+        printf 'Copied to clipboard\n'
     ;;
     'rec')
-        capPath="$(_into 'mp4' "$2" "$3")"
+        capPath="$(_into 'mp4' "$2" "${3-}")"
 
         case "$2" in
             'active') wf-recorder -g "$(active_win)" -f "$capPath";;
@@ -90,8 +94,8 @@ case "$1" in
             *) usage;;
         esac
 
-        printf '%s\n' "$capPath"
-        hash mpv 2>/dev/null&& mpv "$capPath"
+        printf 'Recording saved to: %s\n' "$capPath"
+        mpv "$capPath"
     ;;
     *) usage;;
 esac

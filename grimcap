@@ -1,27 +1,25 @@
 #!/bin/bash
 # grimcap
-# wrapper around grim, wf-recorder & slurp
-# handles screenshots (to clipboard) & recording
-# each dependency could be considered optional, depending on use-case
+# a simplified take on grimblast but we retain swayland compatability from grimshot & more.
+# implements image (to clipboard) & video capture, utilizing reusable code for sway/hyprland.
+# auto copies, saves (with file path), compresses & opens/saves.
+# created by following the wayland section of the archwiki.
 
 # dependencies:
-# grim - capture screenshot
+# jq - json
+# grim - capture image
 # slurp - select geometry
 # wf-recorder - capture video
 # wl-clipboard - copy
 # hyprctl OR swaymsg - active window detection
-# (swayimg) - open image
-# (mpv) - play video
-# jq - json
+# swayimg - open image
+# mpv - play video
+# ffmpeg - video/image compression
 
 # references:
-# 1. https://wiki.archlinux.org/title/Screen_capture#Wayland
-# 2. https://github.com/hyprwm/contrib/blob/main/grimblast/grimblast
-# 3. https://github.com/swaywm/sway/blob/master/contrib/grimshot
-
-# a simplified take on grimblast but we retain swayland compatability from grimshot, implement screen recording, & more
-# this don't process or edit captures in any way; simply captures, stores & optionally opens if swayimg is installed & a file was saved
-# created by following the wayland section of the archwiki
+# - https://wiki.archlinux.org/title/Screen_capture#Wayland
+# - https://github.com/hyprwm/contrib/blob/main/grimblast/grimblast
+# - https://github.com/swaywm/sway/blob/master/contrib/grimshot
 
 usage() {
     cat <<EOF
@@ -41,14 +39,14 @@ EOF
     exit 1
 }
 
-_into() {
+into_date_path() {
     capDir="${3:-$HOME/.caps}"
     [[ -d $capDir ]]|| mkdir "$capDir"
     
     printf "${capDir%/}/%(%Y-%m-%d_%H-%M-%S)T_$2.$1"
 }
 
-active_win() {
+active_window() {
     if hash hyprctl 2>/dev/null; then
         hyprctl -j activewindow | \
             jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
@@ -62,21 +60,26 @@ set -eEuo pipefail
 
 case "$1" in
     'snap')
-        capPath="$(_into 'png' "$2" "${3-}")"
+        tmpPath=$(mktemp -u --suffix='png')
+        capPath=$(into_date_path 'jpg' "$2" "${3-}")
         
         case "$2" in
-            'active') grim -l 9 -g "$(active_win)" "$capPath";;
-            'area') slurp | grim -l 9 -g - "$capPath";;
-            'screen') grim -l 9 "$capPath";;
+            'active') grim -l 9 -g "$(active_window)" "$tmpPath";;
+            'area') slurp | grim -l 9 -g - "$tmpPath";;
+            'screen') grim -l 9 "$tmpPath";;
             *) usage;;
         esac
+
+        printf 'Compressing %s...\n' "$capPath"
+        ffmpeg -i "$tmpPath" -q:v 16 -y "$capPath"
+        rm "$tmpPath"
         
         printf 'Capture saved to: %s\n' "$capPath"
         swayimg "$capPath"
     ;;
     'snap-copy')
         case "$2" in
-            'active') grim -l 9 -g "$(active_win)" - | wl-copy;;
+            'active') grim -l 9 -g "$(active_window)" - | wl-copy;;
             'area') slurp | grim -l 9 -g - - | wl-copy;;
             'screen') grim -l 9 - | wl-copy;;
             *) usage;;
@@ -85,14 +88,19 @@ case "$1" in
         printf 'Copied to clipboard\n'
     ;;
     'rec')
-        capPath="$(_into 'mp4' "$2" "${3-}")"
+        tmpPath=$(mktemp -u --suffix='.mp4')
+        capPath=$(into_date_path 'mp4' "$2" "${3-}")
 
         case "$2" in
-            'active') wf-recorder -g "$(active_win)" -f "$capPath";;
-            'area') wf-recorder -g "$(slurp)" -f "$capPath";;
-            'screen') wf-recorder -f "$capPath";;
+            'active') wf-recorder -g "$(active_window)" -f "$tmpPath";;
+            'area') wf-recorder -g "$(slurp)" -f "$tmpPath";;
+            'screen') wf-recorder -f "$tmpPath";;
             *) usage;;
         esac
+
+        printf 'Compressing %s...\n' "$capPath"
+        ffmpeg -i "$tmpPath" -vcodec libx265 -crf 28 "$capPath" -y
+        rm "$tmpPath"
 
         printf 'Recording saved to: %s\n' "$capPath"
         mpv "$capPath"
